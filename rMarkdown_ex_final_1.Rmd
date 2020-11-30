@@ -1,0 +1,243 @@
+---
+title: "Relatório sobre as informações armazenadas na base IMDb entre 1969 e 2015"
+subtitle: Insights sobre um bom investimento
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(tidyverse)
+library(patchwork)
+imdb <- read_rds("dados/imdb.rds")
+imdb <- imdb %>% mutate(lucro = receita - orcamento)
+imdb <- imdb %>% mutate(deu_lucro = ifelse(lucro > 0, "Lucro", "Prejuízo"))
+
+```
+##### Produzido por: Vitória Barbosa Ferreira
+
+
+## Introdução
+
+A base IMDb (Internet Movie Database) é uma base de dados que contém informações relacionadas a filmes, programas de televisão, streammings e video games. A página contém mais de 6.5 milhões de títulos com cerca de 83 mlhões de usuários cadastrados. Usuários da página podem avaliar o conteúdo do que assistem em uma escala de 1 a 10. A média ponderada dessas avaliações é convertida na nota IMDb do filme. 
+
+Como a IMDb é líder no seu setor, é possível afirmar que esta base de dados é confiável para avaliar a popularidade de um filme.  
+
+Além da nota IMDB a base analisada neste relatório contém informações sobre títulos de filmes, gêneros, classificação, duração, atores, diretores, orçamento, receita, ano de lançamento e quantidade de likes no facebook. Vale dizer que a base analisada consiste em uma amostra de filmes lançados que foram lançados entre 1969 e 2015. 
+
+O objetivo dessa análise é oferecer insights sobre possíveis bons investimentos com base nas informações desta amostra.
+
+Filmes com notas IMDb maior ou igual a 8 serão considerados como filmes muito bem avaliados. 
+
+## Nota IMDb em relação ao orçamento e ao lucro
+
+Para começar, analisando a correlação entre a nota IMDb e o lucro é possível notar que quanto maior o orçamento maior a probabilidade de se obter uma nota IMDb elevada. O mesmo acontece com o lucro, quanto maior o lucro maior a chance de se obter uma nota IMDb alta. 
+
+```{r}
+luc <- imdb %>% filter(!lucro < 0) %>% 
+  ggplot(aes(x = lucro/1000000, y = nota_imdb)) +
+  geom_point()+
+  labs(
+    x = "Lucro (milhões de dólares)",
+    y = "Nota",
+    title = "Figura 2 - Nota IMDb x Lucro"
+  )
+lac <- imdb %>% filter(!is.na(orcamento)) %>% 
+  ggplot(aes(x = orcamento/1000000, y = nota_imdb)) +
+  geom_point()+
+  labs(
+    x = "Orçamento (milhões de dólares)",
+    y = "Nota",
+    title = "Figura 1 - Nota IMDb x Orçamento"
+  )
+  
+lac + luc
+
+  
+```
+
+Como queremos encontrar um equílibrio entre orçamento, lucro e popularidade, seguimos analisando e filtrando a base.
+
+## Filmes Lucrativos
+
+Considerando somente os títulos que possuem dados em relação ao orçamento e à receita, o que nos permite calcular o lucro, temos que: dos 3717 títulos da base, 720 não possuem informação sobre orçamento e/ou receita, consequentemente também não contém informações sobre o lucro. Dos 2993 títulos restantes, apenas 1710 obtiveram lucro. O boxplot abaixo demonstra a distribuição do lucro e do prejuízo desses filmes. 
+
+```{r}
+
+imdb %>% select(deu_lucro, lucro) %>% 
+  filter(!is.na(deu_lucro)) %>% 
+  ggplot() +
+  geom_boxplot(aes(x = deu_lucro, y = lucro/1000000))+
+  labs(
+    y = "Lucro (milhões de dólares)",
+    x = "Lucro x Prejuízo",
+    title = "Figura 3 - Distribuição do lucro e do prejuízo")
+
+```
+
+Como o objetivo é produzir um filme lucrativo, vamos analisar especificamente algumas características dos filmes que estão entre os 25% que mais lucraram (lucro a partir de $30.127.620 de dólares) e que tiveram nota IMDn maior ou igual a 8. 
+
+## Orçamento dos 25% mais lucrativos
+
+No que tange ao orçamento desses filmes, nota-se que o gasto mínimo para estar entre os 25% dos filmes mais lucrativos foi de $806.947 e o máximo foi de $250.000.000 de dólares. A média do orçamento dos 25% dos filmes mais lucrativos foi de $68.137.080,de dólares.
+
+Em outros termos, tendo em vista um lucro elevado, é interessante avaliar a possibilidade de investimento entre $806.947 e $250.000.000 de dólares. 
+
+
+```{r}
+media <- mean(imdb$lucro, na.rm = TRUE)
+q3 <- quantile(imdb$lucro, probs = 0.75, na.rm = TRUE)
+mediana <- median(imdb$lucro, na.rm = TRUE)
+
+lucro_notao <-  imdb %>%
+  filter((nota_imdb > 8) & lucro >= q3 & !is.na(diretor)) %>%
+  group_by(diretor) %>% 
+  filter(n() >= 2)
+
+lucro_notao_completo <- imdb %>%
+  filter((nota_imdb > 8) & lucro >= q3 & !is.na(diretor)) %>%
+  group_by(diretor) 
+
+
+lucro_notao_completo %>% group_by(pais) %>% 
+  summarise(media = scales::dollar(mean(orcamento, na.rm = TRUE)),
+                                   minimo = scales::dollar(min(orcamento,na.rm = TRUE)),
+                                   maximo = scales::dollar(max(orcamento,na.rm = TRUE))) %>% 
+   select(País = pais, Média = media, Mínimo = minimo, Máximo = maximo) %>% 
+  
+   knitr::kable()
+
+```
+
+## Diretores Populares
+
+Dentre os diretores que dirigiram filmes lucrativos e com nota IMDb maior ou igual a 8, destacam-se Steven Spielberg com 5 filmes; Quentin Tarantino e Christopher Nolan com 4 filmes cada e Pete Docter, Francis Ford Copola e Clint Eastwood com 3 filmes cada. A figura 4 elenca todos diretores que produziram pelo menos 2 filmes (na condição de lucro acima de $301.276.20,00 e nota IMDb maior ou igual a 8.0).
+
+```{r}
+lucro_notao %>% 
+  group_by(diretor) %>% 
+  count(diretor) %>% 
+  top_n(10, n) %>% 
+  ungroup() %>% 
+  mutate(diretor = forcats::fct_reorder(diretor, n)) %>% 
+  ggplot() +
+  geom_col(aes(x = diretor, y = n)) +
+  coord_flip()+
+  labs(
+    x = "Diretor",
+    y = "nº",
+    title = "Figura 4 - Número de filmes por diretor",
+    subtitle = "Nota IMDb maior ou igual a 8.0 e lucro acima de $301.276.20,00"
+  )
+
+```
+
+As tabelas abaixo indicam os 5 diretores que obtiveram a maior média de nota IMDb e maior média de lucro, respectivamente:
+
+```{r}
+lucro_notao %>% filter(diretor !="George Roy Hill" & diretor!="Milos Forman") %>% 
+  group_by(diretor) %>% 
+  top_n(5, nota_imdb) %>% 
+  summarise(nota_media = (mean(nota_imdb, na.rm = TRUE))) %>% 
+  top_n(5,nota_media) %>% 
+  arrange(desc(nota_media)) %>% 
+  mutate(pos = 1:5)%>% 
+  select(Posição = pos, Diretor = diretor, Nota_Media = nota_media) %>%  knitr::kable()
+
+lucro_notao %>% filter(diretor !="George Roy Hill" & diretor!="Milos Forman") %>% 
+  group_by(diretor) %>% 
+  summarise(lucro_medio = mean(lucro, na.rm = TRUE)) %>% 
+  top_n(5,lucro_medio) %>% 
+  arrange(desc(lucro_medio)) %>% 
+  mutate(pos = 1:5,
+         lucro = scales::dollar(lucro_medio))%>% 
+    select(Posição = pos, Diretor = diretor, Lucro_Medio = lucro_medio) %>% 
+  knitr::kable() 
+
+
+
+```
+
+Nota-se que 4 diretores se destacam em ambas as listas: Peter Jackson, Christopher Nolan, Steven Spielberg e Robert Zemeckis. Assim, estes 4 diretores se apresentam como sucessos de bilheteria (em termos de retorno financeiro e avaliação do público).  
+
+Nota: nas duas listas foram desconsiderados os diretores George Roy Hill e Milos Forman, falecidos em 2002 e 2018, respectivamente. 
+
+## Atores Populares
+
+Com relação aos atores principais, que atuaram em filmes com notas IMDb e lucros elevados, destacam-se: Harrison Ford com 6 filmes, Tom Hanks e Leonardo de Caprio com 5 filmes e Clint EstWood com 3 filmes (foram considerados todos os atores que fizeram 2 ou mais filmes com nota IMDb maior ou igual 8 e lucro acima de $301.276.20).
+
+```{r}
+lucro_notao_completo %>% group_by(ator_1) %>% 
+  count(ator_1) %>% 
+  arrange(desc(n)) %>% 
+  filter(n >= 2)%>% 
+  ungroup %>% 
+  mutate(ator_1 = forcats::fct_reorder(ator_1,n)) %>% 
+  ggplot() +
+  geom_col(aes(x = ator_1, y = n))+
+  coord_flip()+
+  labs(
+    x = "nº",
+    y = "Atores principais",
+    title = "Figura 6 - Atores populares",
+    subtitle = "Nota IMDb maior ou igual 8 e lucro acima de $301.276.20"
+  )
+```
+
+
+## Faixa Etária
+
+Observa-se que a maioria dos filmes produzidos com nota IMDb maior ou igual 8 e lucro acima de $301.276.20 têm faixa etária a partir de 13 ou 18 anos. A faixa etária a partir de 13 anos é a que possui mais propabilidade de se obter lucros mais elevados, segundo a figura abaixo.
+
+
+```{r}
+lucro_notao_completo %>%
+  group_by(classificacao)%>%
+  ggplot() +
+  geom_point(aes(x = lucro/1000000, y = nota_imdb)) +
+  facet_wrap(~classificacao, ncol = 1)+
+  labs(
+    x = "Lucro (milhão - $)",
+    y = "Nota",
+    title = "Figura 7 - Classificação etária dos filmes",
+    subtitle = "Nota IMDb maior ou igual 8 e lucro acima de $301.276.20 "
+  )
+```
+
+## Duração Média dos filmes
+
+A maioria dos filmes produzidos com nota IMDb maior ou igual 8 e lucro acima de $301.276.20 tem entre 2 e 3 horas de duração. 
+
+```{r}
+lucro_notao_completo %>% group_by(duracao) %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = duracao/60), 
+    binwidth = 1,
+    color = "white"
+  ) +
+  labs(
+    x = "Duração (horas)",
+    y = "nº",
+    title = "Figura 8 - Duração dos filmes",
+    subtitle = "Nota IMDb maior ou igual 8 e lucro acima de $301.276.20"
+  )
+```
+
+## Considerações Finais
+
+Por fim, a análise da base de dados IMDB com amostra de filmes lançados entre 1969 e 2015 demonstrou que: 
+
+  - Filmes que ficaram entre os 25% mais lucrativos tiveram orçamento entre $806.947 e $250.000.000 de dólares.
+
+  - 4 diretores se destacam em termos de retorno financeiro e nota IMDb: Peter Jackson, Christopher Nolan, Steven Spielberg e Robert Zemeckis
+
+  - Os atores mais populares e que participaram de filmes com excelente retorno financeiro são: Harrison Ford, Tom Hanks, Leonardo de Caprio e Clint EstWood. 
+
+  - As faixas etárias mais populares de filmes lucrativos e com nota IMDb elevevada são a partir de 13 e a partir de 18 anos
+
+  - Os filmes têm entre 2 e 3 horas de duração. 
+
